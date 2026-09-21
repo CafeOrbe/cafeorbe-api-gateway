@@ -1,0 +1,37 @@
+# ── Maven / Java ─────────────────────────────
+target/
+*.class
+*.jar
+*.war
+*.log
+hs_err_pid*
+!.mvn/wrapper/maven-wrapper.jar
+
+# ── IDEs ─────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated/
+.springBeans
+.sts4-cache/
+nbproject/
+bin/
+
+# ── Configuración local y secretos ───────────
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml
+application-local.properties
+*.pem
+*.key
+
+# ── Sistema operativo ────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
