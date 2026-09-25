@@ -1,0 +1,240 @@
+name: CI/CD api-gateway
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            m2-
+
+      - name: Build cafeorbe-contracts
+        run: |
+          git clone --depth 1 https://github.com/CafeOrbe/cafeorbe-contracts.git /tmp/contracts
+          cd /tmp/contracts && mvn -B install
+
+      - name: Build and test
+        run: mvn -B verify
+
+  build-push:
+    needs: ci
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build cafeorbe-contracts
+        run: |
+          git clone --depth 1 https://github.com/CafeOrbe/cafeorbe-contracts.git /tmp/contracts
+          cd /tmp/contracts && mvn -B install
+
+      - name: Package jar
+        run: mvn -B package -DskipTests
+
+      - name: Login to ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ secrets.ACR_NAME }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build & push image
+        run: |
+          IMG=${{ secrets.ACR_NAME }}.azurecr.io/api-gateway
+          docker build -t $IMG:${{ github.sha }} -t $IMG:latest .
+          docker push $IMG:${{ github.sha }}
+          docker push $IMG:latest
+
+  deploy-qa:
+    needs: build-push
+    if: github.ref == 'refs/heads/main'
+    environment: QA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v2
+        with:
+          creds: '${{ secrets.AZURE_CREDENTIALS }}'
+
+      - name: Deploy QA Container App
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          RABBIT_PASSWORD: ${{ secrets.RABBIT_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          APP_NAME="api-gateway"
+          RESOURCE_GROUP="cafeorbe-org"
+          CONTAINER_ENV="cafeorbe-qa"
+          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/api-gateway:${{ github.sha }}"
+
+          az extension add --name containerapp --upgrade --only-show-errors
+
+          if az containerapp show \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --only-show-errors >/dev/null 2>&1; then
+
+            az containerapp update \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --image "$IMAGE" \
+              --min-replicas 1 \
+              --set-env-vars \
+                "JWT_SECRET=$JWT_SECRET" \
+                "IDENTITY_URL=http://identity-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "AUCTION_URL=http://auction-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "WALLET_URL=http://wallet-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "STREAMING_URL=http://streaming-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "CORS_ORIGINS=https://cafeorbe-web.vercel.app"
+
+          else
+
+            az containerapp create \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --environment "$CONTAINER_ENV" \
+              --image "$IMAGE" \
+              --ingress external \
+              --target-port 8080 \
+              --min-replicas 1 \
+              --registry-server "${{ secrets.ACR_NAME }}.azurecr.io" \
+              --registry-username "${{ secrets.ACR_USERNAME }}" \
+              --registry-password "${{ secrets.ACR_PASSWORD }}" \
+              --env-vars \
+                "JWT_SECRET=$JWT_SECRET" \
+                "IDENTITY_URL=http://identity-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "AUCTION_URL=http://auction-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "WALLET_URL=http://wallet-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "STREAMING_URL=http://streaming-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "CORS_ORIGINS=https://cafeorbe-web.vercel.app"
+
+          fi
+
+      - name: Smoke test
+        run: |
+          URL=$(az containerapp show \
+            --name api-gateway \
+            --resource-group cafeorbe-org \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+
+          for i in $(seq 1 12); do
+            if curl --fail --show-error --silent "https://$URL/actuator/health" 2>/dev/null; then
+              echo "Health UP en intento $i"
+              exit 0
+            fi
+            echo "Intento $i: aún no listo, esperando 15s..."
+            sleep 15
+          done
+          echo "Health no respondió tras 12 intentos"
+          exit 1
+
+  deploy-prod:
+    needs: build-push
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment: PROD
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v2
+        with:
+          creds: '${{ secrets.AZURE_CREDENTIALS }}'
+
+      - name: Deploy PROD Container App
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          RABBIT_PASSWORD: ${{ secrets.RABBIT_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          APP_NAME="api-gateway-prod"
+          RESOURCE_GROUP="cafeorbe-org"
+          CONTAINER_ENV="cafeorbe-prod"
+          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/api-gateway:${{ github.sha }}"
+
+          az extension add --name containerapp --upgrade --only-show-errors
+
+          if az containerapp show \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --only-show-errors >/dev/null 2>&1; then
+
+            az containerapp update \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --image "$IMAGE" \
+              --min-replicas 1 \
+              --set-env-vars \
+                "JWT_SECRET=$JWT_SECRET" \
+                "IDENTITY_URL=http://identity-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "AUCTION_URL=http://auction-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "WALLET_URL=http://wallet-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "STREAMING_URL=http://streaming-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "CORS_ORIGINS=https://cafeorbe-web.vercel.app"
+
+          else
+
+            az containerapp create \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --environment "$CONTAINER_ENV" \
+              --image "$IMAGE" \
+              --ingress external \
+              --target-port 8080 \
+              --min-replicas 1 \
+              --registry-server "${{ secrets.ACR_NAME }}.azurecr.io" \
+              --registry-username "${{ secrets.ACR_USERNAME }}" \
+              --registry-password "${{ secrets.ACR_PASSWORD }}" \
+              --env-vars \
+                "JWT_SECRET=$JWT_SECRET" \
+                "IDENTITY_URL=http://identity-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "AUCTION_URL=http://auction-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "WALLET_URL=http://wallet-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "STREAMING_URL=http://streaming-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "CORS_ORIGINS=https://cafeorbe-web.vercel.app"
+
+          fi
+
+      - name: Smoke test
+        run: |
+          URL=$(az containerapp show \
+            --name api-gateway-prod \
+            --resource-group cafeorbe-org \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+
+          for i in $(seq 1 12); do
+            if curl --fail --show-error --silent "https://$URL/actuator/health" 2>/dev/null; then
+              echo "Health UP en intento $i"
+              exit 0
+            fi
+            echo "Intento $i: aún no listo, esperando 15s..."
+            sleep 15
+          done
+          echo "Health no respondió tras 12 intentos"
+          exit 1
