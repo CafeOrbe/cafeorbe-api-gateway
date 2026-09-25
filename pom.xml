@@ -77,6 +77,25 @@
     <build>
         <finalName>app</finalName>
         <plugins>
+            <!-- Java 21 es obligatorio en CaféOrbe: el build falla con otro JDK en lugar de compilar distinto. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>exigir-java-21</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[21,22)</version>
+                                    <message>CaféOrbe exige Java 21 (JDK 21.x). Configura JAVA_HOME con un JDK 21.</message>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
