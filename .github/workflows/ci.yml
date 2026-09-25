@@ -106,10 +106,10 @@ jobs:
               --min-replicas 1 \
               --set-env-vars \
                 "JWT_SECRET=$JWT_SECRET" \
-                "IDENTITY_URL=http://identity-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
-                "AUCTION_URL=http://auction-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
-                "WALLET_URL=http://wallet-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
-                "STREAMING_URL=http://streaming-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "IDENTITY_URL=https://identity-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "AUCTION_URL=https://auction-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "WALLET_URL=https://wallet-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "STREAMING_URL=https://streaming-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
                 "CORS_ORIGINS=https://cafeorbe-web.vercel.app"
 
           else
@@ -127,10 +127,10 @@ jobs:
               --registry-password "${{ secrets.ACR_PASSWORD }}" \
               --env-vars \
                 "JWT_SECRET=$JWT_SECRET" \
-                "IDENTITY_URL=http://identity-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
-                "AUCTION_URL=http://auction-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
-                "WALLET_URL=http://wallet-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
-                "STREAMING_URL=http://streaming-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "IDENTITY_URL=https://identity-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "AUCTION_URL=https://auction-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "WALLET_URL=https://wallet-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
+                "STREAMING_URL=https://streaming-service.internal.blackbay-48700ead.eastus2.azurecontainerapps.io" \
                 "CORS_ORIGINS=https://cafeorbe-web.vercel.app"
 
           fi
@@ -191,10 +191,10 @@ jobs:
               --min-replicas 1 \
               --set-env-vars \
                 "JWT_SECRET=$JWT_SECRET" \
-                "IDENTITY_URL=http://identity-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
-                "AUCTION_URL=http://auction-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
-                "WALLET_URL=http://wallet-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
-                "STREAMING_URL=http://streaming-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "IDENTITY_URL=https://identity-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "AUCTION_URL=https://auction-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "WALLET_URL=https://wallet-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "STREAMING_URL=https://streaming-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
                 "CORS_ORIGINS=https://cafeorbe-web.vercel.app"
 
           else
@@ -212,10 +212,10 @@ jobs:
               --registry-password "${{ secrets.ACR_PASSWORD }}" \
               --env-vars \
                 "JWT_SECRET=$JWT_SECRET" \
-                "IDENTITY_URL=http://identity-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
-                "AUCTION_URL=http://auction-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
-                "WALLET_URL=http://wallet-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
-                "STREAMING_URL=http://streaming-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "IDENTITY_URL=https://identity-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "AUCTION_URL=https://auction-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "WALLET_URL=https://wallet-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
+                "STREAMING_URL=https://streaming-service.internal.thankfulmoss-4f48ec41.eastus2.azurecontainerapps.io" \
                 "CORS_ORIGINS=https://cafeorbe-web.vercel.app"
 
           fi

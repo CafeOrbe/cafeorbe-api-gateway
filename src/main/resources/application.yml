@@ -9,6 +9,10 @@ spring:
       httpclient:
         connect-timeout: 2000
         response-timeout: 10s
+        ssl:
+          # El certificado de ACA no cubre los FQDNs internos (*.internal.azurecontainerapps.io).
+          # El tráfico entre apps del mismo entorno es interno; aceptable para el MVP.
+          use-insecure-trust-manager: true
       globalcors:
         # Necesario para que los preflight (OPTIONS) se resuelvan aunque ninguna ruta los atienda
         add-to-simple-url-handler-mapping: true
