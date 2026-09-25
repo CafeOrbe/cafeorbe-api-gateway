@@ -35,6 +35,7 @@ public class AutenticacionFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange intercambio, GatewayFilterChain cadena) {
         ServerHttpRequest peticion = intercambio.getRequest();
         ServerHttpRequest.Builder limpia = peticion.mutate().headers(h -> {
+            h.remove(HttpHeaders.HOST);
             h.remove(Cabeceras.USUARIO_ID);
             h.remove(Cabeceras.USUARIO_NOMBRE);
             h.remove(Cabeceras.USUARIO_ROL);
