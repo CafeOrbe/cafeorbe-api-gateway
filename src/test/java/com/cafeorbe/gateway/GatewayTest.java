@@ -168,6 +168,18 @@ class GatewayTest {
     }
 
     @Test
+    @DisplayName("El webhook de LiveKit no exige token de sesión: se enruta a streaming; el resto de /api/streaming sí lo exige")
+    void webhookDeLiveKit() {
+        // En esta prueba streaming está caído: un 503 demuestra que la petición pasó el filtro y se intentó enrutar.
+        http.post().uri("/api/streaming/webhooks/livekit").contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
+                .exchange().expectStatus().isEqualTo(503);
+        http.post().uri("/api/streaming/subastas/" + UUID.randomUUID() + "/iniciar")
+                .exchange().expectStatus().isUnauthorized();
+        http.get().uri("/api/streaming/webhooks/livekit")
+                .exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
     @DisplayName("CORS: el preflight del origen permitido se responde sin exigir token; otro origen se rechaza")
     void cors() throws Exception {
         // Se usa un cliente HTTP real: WebTestClient no envía el host y Spring lo toma por un origen malformado.

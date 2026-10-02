@@ -57,13 +57,17 @@ public class AutenticacionFilter implements GlobalFilter, Ordered {
         return cadena.filter(intercambio.mutate().request(limpia.build()).build());
     }
 
-    /** Solo el ingreso (POST /api/sesion) y los preflight de CORS no exigen token. */
+    /** Webhook de LiveKit: no trae token de sesión; streaming-service lo autentica por la firma de LiveKit. */
+    static final String RUTA_WEBHOOK_LIVEKIT = "/api/streaming/webhooks/livekit";
+
+    /** Solo el ingreso (POST /api/sesion), el webhook de LiveKit y los preflight de CORS no exigen token. */
     private static boolean esPublica(ServerHttpRequest peticion) {
         if (HttpMethod.OPTIONS.equals(peticion.getMethod())) {
             return true;
         }
         String ruta = peticion.getPath().value();
-        return HttpMethod.POST.equals(peticion.getMethod()) && (ruta.equals("/api/sesion") || ruta.equals("/api/sesion/"));
+        return HttpMethod.POST.equals(peticion.getMethod())
+                && (ruta.equals("/api/sesion") || ruta.equals("/api/sesion/") || ruta.equals(RUTA_WEBHOOK_LIVEKIT));
     }
 
     @Override
