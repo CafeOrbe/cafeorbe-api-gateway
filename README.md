@@ -85,7 +85,7 @@ flowchart TB
 | `/api/orbes/**` | wallet-service | `WALLET_URL` |
 | `/api/streaming/**` | streaming-service | `STREAMING_URL` |
 
-**Solo se expone lo que pertenece a una historia del MVP.** Cualquier otra ruta responde `404` con el formato uniforme. En particular, las rutas `/internal/**` de los servicios (consulta de saldo entre servicios, webhooks de LiveKit) no se enrutan.
+**Solo se expone lo que pertenece a una historia del MVP.** Cualquier otra ruta responde `404` con el formato uniforme. En particular, las rutas `/internal/**` de los servicios (como la consulta de saldo entre servicios) no se enrutan.
 
 ## 4. Flujo de una petición
 
@@ -110,7 +110,7 @@ sequenceDiagram
     end
 ```
 
-Solo dos casos no exigen token: `POST /api/sesion` (el ingreso) y los preflight `OPTIONS` de CORS.
+Solo tres casos no exigen token de sesión: `POST /api/sesion` (el ingreso), los preflight `OPTIONS` de CORS y `POST /api/streaming/webhooks/livekit`. Este último lo llama LiveKit, no un usuario: el gateway lo deja pasar y streaming-service lo autentica por la firma de LiveKit.
 
 ## 5. Modelo de confianza
 
@@ -221,7 +221,7 @@ El pipeline (`.github/workflows/ci.yml`) despliega en QA con cada cambio en `mai
 
 | Riesgo o deuda | Impacto | Acción propuesta |
 |---|---|---|
-| `use-insecure-trust-manager: true` | El gateway no valida el certificado de los servicios internos. Se activó porque el certificado del entorno no cubre los nombres internos | Certificado válido para los nombres internos, o tráfico interno por HTTP dentro de la red privada |
+| `use-insecure-trust-manager: true` | El gateway no valida el certificado de los servicios internos. Se activó porque el certificado del entorno no cubre los nombres internos | Ya no debería hacer falta: las URLs usan ahora el nombre real de cada aplicación, cuyo certificado es válido. Quitar la opción y probarlo en QA |
 | Sin límite de peticiones | Un cliente puede saturar un servicio | Rate limiting por usuario en el gateway |
 | Token sin revocación | Cerrar sesión solo borra el token en el navegador; sigue siendo válido hasta 8 horas | Lista de revocación o tokens de vida corta con renovación |
 | Sin reintentos ni cortacircuitos | Un servicio intermitente devuelve errores directos al usuario | Circuit breaker para lecturas idempotentes |
