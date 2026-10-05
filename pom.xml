@@ -18,6 +18,10 @@
     <description>Punto único de entrada HTTP: enrutamiento, validación de sesión y CORS</description>
 
     <properties>
+        <sonar.projectKey>cafeorbe-api-gateway</sonar.projectKey>
+        <sonar.organization>cafeorbe</sonar.organization>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <java.version>21</java.version>
         <spring-cloud.version>2025.0.3</spring-cloud.version>
         <jjwt.version>0.13.0</jjwt.version>
