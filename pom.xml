@@ -21,6 +21,8 @@
         <sonar.projectKey>cafeorbe-api-gateway</sonar.projectKey>
         <sonar.organization>cafeorbe</sonar.organization>
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.featureflag.cloud-security-enable-secrets-S8135>true</sonar.featureflag.cloud-security-enable-secrets-S8135>
+        <sonar.featureflag.cloud-security-enable-secrets-S8136>true</sonar.featureflag.cloud-security-enable-secrets-S8136>
         <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <sonar.coverage.exclusions>**/*Application.java</sonar.coverage.exclusions>
         <java.version>21</java.version>
