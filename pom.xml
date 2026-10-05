@@ -21,6 +21,7 @@
         <java.version>21</java.version>
         <spring-cloud.version>2025.0.3</spring-cloud.version>
         <jjwt.version>0.13.0</jjwt.version>
+        <jacoco.version>0.8.13</jacoco.version>
     </properties>
 
     <dependencyManagement>
@@ -93,6 +94,31 @@
                                 </requireJavaVersion>
                             </rules>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- JaCoCo mide la cobertura que SonarCloud leerá. Spring Boot no gestiona la versión del
+                 plugin, así que se fija aquí. El informe XML se escribe en la fase verify. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <configuration>
+                    <excludes>
+                        <!-- Solo arranque de Spring: probar main() exigiría levantar el contexto entero
+                             para no assertar nada. Se documenta aquí y se reutiliza en SonarCloud. -->
+                        <exclude>**/*Application.class</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>preparar-agente</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>generar-informe</id>
+                        <phase>verify</phase>
+                        <goals><goal>report</goal></goals>
                     </execution>
                 </executions>
             </plugin>

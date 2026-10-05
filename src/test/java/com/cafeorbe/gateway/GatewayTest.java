@@ -180,6 +180,22 @@ class GatewayTest {
     }
 
     @Test
+    @DisplayName("Una cabecera Authorization que no es Bearer no vale como sesión")
+    void esquemaDistintoNoAutentica() {
+        http.get().uri("/api/subastas")
+                .header(HttpHeaders.AUTHORIZATION, "Basic YW5hOnN1cGFzYXNzd29yZA==")
+                .exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @DisplayName("El ingreso con barra final también es público: /api/sesion/ no exige token")
+    void ingresoConBarraFinalEsPublico() {
+        http.post().uri("/api/sesion/").contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
+                .exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.ruta").isEqualTo("/api/sesion/").jsonPath("$.id").isEqualTo("null");
+    }
+
+    @Test
     @DisplayName("CORS: el preflight del origen permitido se responde sin exigir token; otro origen se rechaza")
     void cors() throws Exception {
         // Se usa un cliente HTTP real: WebTestClient no envía el host y Spring lo toma por un origen malformado.
