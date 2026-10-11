@@ -63,15 +63,15 @@ jobs:
         run: mvn -B package -DskipTests
 
       - name: Login to ACR
-        uses: azure/docker-login@v2
+        uses: azure/docker-login@15c4aadf093404726ab2ff205b2cdd33fa6d054c  # v2
         with:
-          login-server: ${{ secrets.ACR_NAME }}.azurecr.io
+          login-server: ${{ vars.ACR_NAME }}.azurecr.io
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build & push image
         run: |
-          IMG=${{ secrets.ACR_NAME }}.azurecr.io/api-gateway
+          IMG=${{ vars.ACR_NAME }}.azurecr.io/api-gateway
           docker build -t $IMG:${{ github.sha }} -t $IMG:latest .
           docker push $IMG:${{ github.sha }}
           docker push $IMG:latest
@@ -82,7 +82,7 @@ jobs:
     environment: QA
     runs-on: ubuntu-latest
     steps:
-      - uses: azure/login@v2
+      - uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6  # v2
         with:
           creds: '${{ secrets.AZURE_CREDENTIALS }}'
 
@@ -97,7 +97,7 @@ jobs:
           APP_NAME="api-gateway"
           RESOURCE_GROUP="cafeorbe-org"
           CONTAINER_ENV="cafeorbe-qa"
-          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/api-gateway:${{ github.sha }}"
+          IMAGE="${{ vars.ACR_NAME }}.azurecr.io/api-gateway:${{ github.sha }}"
 
           az extension add --name containerapp --upgrade --only-show-errors
 
@@ -129,7 +129,7 @@ jobs:
               --ingress external \
               --target-port 8080 \
               --min-replicas 1 \
-              --registry-server "${{ secrets.ACR_NAME }}.azurecr.io" \
+              --registry-server "${{ vars.ACR_NAME }}.azurecr.io" \
               --registry-username "${{ secrets.ACR_USERNAME }}" \
               --registry-password "${{ secrets.ACR_PASSWORD }}" \
               --env-vars \
@@ -167,7 +167,7 @@ jobs:
     environment: PROD
     runs-on: ubuntu-latest
     steps:
-      - uses: azure/login@v2
+      - uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6  # v2
         with:
           creds: '${{ secrets.AZURE_CREDENTIALS }}'
 
@@ -182,7 +182,7 @@ jobs:
           APP_NAME="api-gateway-prod"
           RESOURCE_GROUP="cafeorbe-org"
           CONTAINER_ENV="cafeorbe-prod"
-          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/api-gateway:${{ github.sha }}"
+          IMAGE="${{ vars.ACR_NAME }}.azurecr.io/api-gateway:${{ github.sha }}"
 
           az extension add --name containerapp --upgrade --only-show-errors
 
@@ -214,7 +214,7 @@ jobs:
               --ingress external \
               --target-port 8080 \
               --min-replicas 1 \
-              --registry-server "${{ secrets.ACR_NAME }}.azurecr.io" \
+              --registry-server "${{ vars.ACR_NAME }}.azurecr.io" \
               --registry-username "${{ secrets.ACR_USERNAME }}" \
               --registry-password "${{ secrets.ACR_PASSWORD }}" \
               --env-vars \
