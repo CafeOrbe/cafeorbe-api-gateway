@@ -296,7 +296,10 @@ class GatewayTest {
     @DisplayName("OBS-01/DIS-01 · Las métricas llevan la réplica (instancia) y no el histograma completo")
     void metricasPorReplicaSinHistogramaCompleto() {
         http.get().uri("/api/orbes/saldo").header(HttpHeaders.AUTHORIZATION, valido()).exchange();
-        String cuerpo = http.get().uri("/actuator/prometheus").header("X-Internal-Token", "credencial-de-prueba")
+        // La primera lectura de /actuator/prometheus arma todo el registro: con la máquina cargada pasaba de los 5 s
+        // por defecto del cliente de prueba.
+        String cuerpo = http.mutate().responseTimeout(java.time.Duration.ofSeconds(30)).build()
+                .get().uri("/actuator/prometheus").header("X-Internal-Token", "credencial-de-prueba")
                 .exchange().expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
 
         org.assertj.core.api.Assertions.assertThat(cuerpo).contains("instancia=\"")

@@ -3,6 +3,7 @@ package com.cafeorbe.gateway.filters.auth;
 import com.cafeorbe.contracts.Rol;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,10 +23,28 @@ public class ValidadorDeToken {
     public record Identidad(UUID id, String nombre, Rol rol, String jti) {
     }
 
-    private final SecretKey clave;
+    /**
+     * SEG-02 (verificación en menos de 5 ms en p95): el parser es inmutable y seguro entre hilos, así que se arma una vez.
+     * Armarlo en cada petición carga los servicios de la librería (deserializador JSON, códecs) y, en frío, una
+     * sola petición llegó a tardar 60 ms; con pocas muestras eso basta para pasar del 5 % lento.
+     */
+    private final JwtParser parser;
 
     public ValidadorDeToken(@Value("${cafeorbe.jwt.secret}") String secreto) {
-        this.clave = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));
+        SecretKey clave = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));
+        this.parser = Jwts.parser().verifyWith(clave).build();
+        calentar(clave);
+    }
+
+    /**
+     * Valida una vez un token propio al arrancar: la carga de clases y la primera compilación ocurren antes de
+     * atender tráfico y no en la primera petición de un usuario.
+     */
+    private void calentar(SecretKey clave) {
+        String propio = Jwts.builder().id("calentamiento").subject(new UUID(0, 0).toString())
+                .claim("nombre", "calentamiento").claim("rol", Rol.COMPRADOR.name())
+                .expiration(new Date(System.currentTimeMillis() + 60_000)).signWith(clave).compact();
+        validar("Bearer " + propio);
     }
 
     /**
@@ -37,8 +57,7 @@ public class ValidadorDeToken {
             return Optional.empty();
         }
         try {
-            Claims claims = Jwts.parser().verifyWith(clave).build()
-                    .parseSignedClaims(cabecera.substring(7).trim()).getPayload();
+            Claims claims = parser.parseSignedClaims(cabecera.substring(7).trim()).getPayload();
             if (claims.getId() == null || claims.getId().isBlank()) {
                 return Optional.empty();
             }
