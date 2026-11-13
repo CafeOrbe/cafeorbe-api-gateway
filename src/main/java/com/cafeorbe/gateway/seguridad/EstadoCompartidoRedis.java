@@ -3,6 +3,7 @@ package com.cafeorbe.gateway.seguridad;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -15,6 +16,8 @@ import java.time.Duration;
  * teniendo que ser válido y no vencido; lo que se pierde durante la caída es solo la revocación anticipada.
  */
 @Component
+// Implementación por defecto. La de memoria depende de la misma propiedad con otro valor: nunca existen las dos.
+@Primary
 @ConditionalOnProperty(name = "cafeorbe.estado.modo", havingValue = "redis", matchIfMissing = true)
 public class EstadoCompartidoRedis implements EstadoCompartido {
 
