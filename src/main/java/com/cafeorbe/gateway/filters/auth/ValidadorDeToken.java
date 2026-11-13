@@ -17,7 +17,8 @@ import java.util.UUID;
 @Component
 public class ValidadorDeToken {
 
-    public record Identidad(UUID id, String nombre, Rol rol) {
+    /** @param jti identificador de la sesión; es lo que identity anota cuando la sesión se cierra (SEG-05) */
+    public record Identidad(UUID id, String nombre, Rol rol, String jti) {
     }
 
     private final SecretKey clave;
@@ -26,7 +27,11 @@ public class ValidadorDeToken {
         this.clave = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));
     }
 
-    /** @param cabecera valor de Authorization, con el prefijo {@code Bearer } */
+    /**
+     * @param cabecera valor de Authorization, con el prefijo {@code Bearer }
+     * @return vacío si falta, la firma no cuadra, venció o no trae {@code jti} (los tokens sin jti no se pueden
+     *         revocar, así que ya no se aceptan)
+     */
     public Optional<Identidad> validar(String cabecera) {
         if (cabecera == null || !cabecera.regionMatches(true, 0, "Bearer ", 0, 7)) {
             return Optional.empty();
@@ -34,9 +39,12 @@ public class ValidadorDeToken {
         try {
             Claims claims = Jwts.parser().verifyWith(clave).build()
                     .parseSignedClaims(cabecera.substring(7).trim()).getPayload();
+            if (claims.getId() == null || claims.getId().isBlank()) {
+                return Optional.empty();
+            }
             return Optional.of(new Identidad(UUID.fromString(claims.getSubject()), claims.get("nombre", String.class),
-                    Rol.valueOf(claims.get("rol", String.class))));
-        } catch (JwtException | IllegalArgumentException e) {
+                    Rol.valueOf(claims.get("rol", String.class)), claims.getId()));
+        } catch (JwtException | IllegalArgumentException | NullPointerException e) {
             return Optional.empty();
         }
     }

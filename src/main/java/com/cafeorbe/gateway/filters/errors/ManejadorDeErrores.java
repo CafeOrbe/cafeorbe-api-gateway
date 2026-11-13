@@ -45,8 +45,10 @@ public class ManejadorDeErrores implements WebExceptionHandler {
             mensaje = "Error interno del servidor";
         }
         if (estado.is5xxServerError()) {
-            log.warn("{} {} → {} ({})", intercambio.getRequest().getMethod(), intercambio.getRequest().getPath(),
-                    estado.value(), error.toString());
+            log.atWarn().addKeyValue("correlationId",
+                            intercambio.getRequest().getHeaders().getFirst("X-Correlation-Id"))
+                    .log("{} {} → {} ({})", intercambio.getRequest().getMethod(), intercambio.getRequest().getPath(),
+                            estado.value(), error.toString());
         }
         return errores.escribir(intercambio.getResponse(), estado, mensaje);
     }

@@ -25,7 +25,10 @@ class AutenticacionFilterTest {
 
     private final ValidadorDeToken validador = mock(ValidadorDeToken.class);
     private final AutenticacionFilter filtro =
-            new AutenticacionFilter(validador, new RespuestaDeError(new ObjectMapper()));
+            new AutenticacionFilter(validador, new RespuestaDeError(new ObjectMapper()),
+                    new com.cafeorbe.gateway.seguridad.EstadoCompartidoEnMemoria(),
+                    new com.cafeorbe.gateway.seguridad.Auditoria(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()),
+                    "credencial-de-prueba");
 
     private GatewayFilterChain cadenaQuePasa() {
         var cadena = mock(GatewayFilterChain.class);

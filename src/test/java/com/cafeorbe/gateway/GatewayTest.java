@@ -26,8 +26,11 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {"cafeorbe.estado.modo=memoria", "cafeorbe.limite.rest.por-segundo=1000",
+                "cafeorbe.seguridad.credencial-interna=credencial-de-prueba", "logging.structured.format.console="})
 @AutoConfigureWebTestClient
+@org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability(tracing = false)
 class GatewayTest {
 
     static final String SECRETO = "cafeorbe-dev-jwt-secret-cambiar-en-prod-0123456789";
@@ -45,7 +48,9 @@ class GatewayTest {
             String cuerpo = "{\"ruta\":\"" + intercambio.getRequestURI().getPath() + "\","
                     + "\"id\":\"" + h.getFirst(Cabeceras.USUARIO_ID) + "\","
                     + "\"nombre\":\"" + h.getFirst(Cabeceras.USUARIO_NOMBRE) + "\","
-                    + "\"rol\":\"" + h.getFirst(Cabeceras.USUARIO_ROL) + "\"}";
+                    + "\"rol\":\"" + h.getFirst(Cabeceras.USUARIO_ROL) + "\","
+                    + "\"credencial\":\"" + h.getFirst("X-Internal-Token") + "\","
+                    + "\"correlacion\":\"" + h.getFirst("X-Correlation-Id") + "\"}";
             byte[] bytes = cuerpo.getBytes(StandardCharsets.UTF_8);
             intercambio.getResponseHeaders().add("Content-Type", "application/json");
             intercambio.sendResponseHeaders(200, bytes.length);
@@ -87,7 +92,7 @@ class GatewayTest {
     @Autowired WebTestClient http;
 
     private static String token(UUID id, String nombre, String rol, Instant vence) {
-        return Jwts.builder().subject(id.toString()).claim("nombre", nombre).claim("rol", rol)
+        return Jwts.builder().id(UUID.randomUUID().toString()).subject(id.toString()).claim("nombre", nombre).claim("rol", rol)
                 .expiration(Date.from(vence))
                 .signWith(Keys.hmacShaKeyFor(SECRETO.getBytes(StandardCharsets.UTF_8))).compact();
     }
@@ -97,11 +102,11 @@ class GatewayTest {
     }
 
     @Test
-    @DisplayName("El ingreso (POST /api/sesion) es público y llega a identity sin identidad")
+    @DisplayName("SEG-01 · El ingreso con Google es público y llega a identity sin identidad")
     void ingresoEsPublico() {
-        http.post().uri("/api/sesion").contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
+        http.post().uri("/api/sesion/google").contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
                 .exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.ruta").isEqualTo("/api/sesion").jsonPath("$.id").isEqualTo("null");
+                .expectBody().jsonPath("$.ruta").isEqualTo("/api/sesion/google").jsonPath("$.id").isEqualTo("null");
     }
 
     @Test
@@ -139,7 +144,7 @@ class GatewayTest {
                 .expectBody().jsonPath("$.id").isEqualTo(ANA.toString()).jsonPath("$.rol").isEqualTo("COMPRADOR");
 
         // También se descartan en las rutas públicas.
-        http.post().uri("/api/sesion").header(Cabeceras.USUARIO_ID, UUID.randomUUID().toString())
+        http.post().uri("/api/sesion/google").header(Cabeceras.USUARIO_ID, UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
                 .exchange().expectBody().jsonPath("$.id").isEqualTo("null");
     }
@@ -188,11 +193,13 @@ class GatewayTest {
     }
 
     @Test
-    @DisplayName("El ingreso con barra final también es público: /api/sesion/ no exige token")
-    void ingresoConBarraFinalEsPublico() {
-        http.post().uri("/api/sesion/").contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
-                .exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.ruta").isEqualTo("/api/sesion/").jsonPath("$.id").isEqualTo("null");
+    @DisplayName("SEG-01 · No hay acceso propio por nombre: POST /api/sesion ya no es público y sin token da 401")
+    void sinAccesoPorNombre() {
+        for (String ruta : new String[] { "/api/sesion", "/api/sesion/" }) {
+            http.post().uri(ruta).contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"nombre\":\"Intruso\",\"rol\":\"COMPRADOR\"}")
+                    .exchange().expectStatus().isUnauthorized();
+        }
     }
 
     @Test
@@ -222,5 +229,83 @@ class GatewayTest {
 
         org.assertj.core.api.Assertions.assertThat(preflight.apply("http://sitio-malicioso.example").statusCode())
                 .isEqualTo(403);
+    }
+
+    @Autowired com.cafeorbe.gateway.seguridad.EstadoCompartidoEnMemoria estado;
+
+    @Test
+    @DisplayName("SEG-02 · El gateway agrega la credencial interna y pisa la que intente mandar el cliente")
+    void credencialInterna() {
+        http.get().uri("/api/orbes/saldo").header(HttpHeaders.AUTHORIZATION, valido())
+                .header("X-Internal-Token", "inventada-por-el-cliente")
+                .exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.credencial").isEqualTo("credencial-de-prueba");
+    }
+
+    @Test
+    @DisplayName("SEG-01 · El ingreso con Google es público; cerrar sesión y pedir ticket WS sí exigen sesión")
+    void rutasDeSesion() {
+        http.post().uri("/api/sesion/google").contentType(MediaType.APPLICATION_JSON).bodyValue("{}")
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.ruta").isEqualTo("/api/sesion/google");
+        http.post().uri("/api/sesion/cerrar").exchange().expectStatus().isUnauthorized();
+        http.post().uri("/api/sesion/ticket-ws").exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
+    @DisplayName("SEG-05 · 10 peticiones con un token de sesión ya cerrada: todas 401 y ninguna llega al servicio")
+    void sesionCerrada() {
+        String jti = UUID.randomUUID().toString();
+        String token = Jwts.builder().id(jti).subject(ANA.toString()).claim("nombre", "Ana").claim("rol", "COMPRADOR")
+                .expiration(Date.from(Instant.now().plusSeconds(600)))
+                .signWith(Keys.hmacShaKeyFor(SECRETO.getBytes(StandardCharsets.UTF_8))).compact();
+        http.get().uri("/api/orbes/saldo").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange().expectStatus().isOk();
+
+        estado.cerrarSesion(jti);
+        for (String ruta : new String[] {"/api/orbes/saldo", "/api/subastas", "/api/subastas/mias", "/api/orbes/movimientos",
+                "/api/orbes/ganancias", "/api/subastas/" + UUID.randomUUID(), "/api/sesion/ticket-ws", "/api/sesion/cerrar",
+                "/api/subastas?estado=en_curso", "/api/orbes/saldo"}) {
+            http.get().uri(ruta).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .exchange().expectStatus().isUnauthorized()
+                    .expectBody().jsonPath("$.mensaje").isEqualTo("Sesión requerida o expirada");
+        }
+    }
+
+    @Test
+    @DisplayName("OBS-01 · Cada petición lleva un X-Correlation-Id hacia el servicio y de vuelta al cliente")
+    void correlacion() {
+        http.get().uri("/api/orbes/saldo").header(HttpHeaders.AUTHORIZATION, valido())
+                .header("X-Correlation-Id", "puja-abc-12345")
+                .exchange().expectStatus().isOk()
+                .expectHeader().valueEquals("X-Correlation-Id", "puja-abc-12345")
+                .expectBody().jsonPath("$.correlacion").isEqualTo("puja-abc-12345");
+        http.get().uri("/api/orbes/saldo").header(HttpHeaders.AUTHORIZATION, valido())
+                .exchange().expectHeader().exists("X-Correlation-Id");
+    }
+
+    @Test
+    @DisplayName("OBS-01 · /actuator/prometheus exige la credencial interna; la salud es abierta")
+    void metricasProtegidas() {
+        http.get().uri("/actuator/prometheus").exchange().expectStatus().isForbidden();
+        http.get().uri("/actuator/prometheus").header("X-Internal-Token", "credencial-de-prueba")
+                .exchange().expectStatus().isOk();
+        http.get().uri("/actuator/health/liveness").exchange().expectStatus().isOk();
+    }
+
+    @Test
+    @DisplayName("OBS-01/DIS-01 · Las métricas llevan la réplica (instancia) y no el histograma completo")
+    void metricasPorReplicaSinHistogramaCompleto() {
+        http.get().uri("/api/orbes/saldo").header(HttpHeaders.AUTHORIZATION, valido()).exchange();
+        String cuerpo = http.get().uri("/actuator/prometheus").header("X-Internal-Token", "credencial-de-prueba")
+                .exchange().expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+
+        org.assertj.core.api.Assertions.assertThat(cuerpo).contains("instancia=\"")
+                .containsPattern("http_server_requests_seconds_bucket\\{[^}]*le=\"0\\.8\"")
+                // SEG-02: la verificación de la sesión (token + sesión cerrada en Redis) tiene su bucket en 5 ms.
+                .containsPattern("cafeorbe_seguridad_verificacion_seconds_bucket\\{[^}]*etapa=\"sesion\"[^}]*le=\"0\\.005\"")
+                // La consulta a Redis de sesión cerrada va en su propia etapa: no se mezcla con la meta de SEG-02.
+                .containsPattern("cafeorbe_seguridad_verificacion_seconds_count\\{[^}]*etapa=\"sesion_cerrada\"")
+                // Las peticiones HTTP no llevan el histograma completo (~70 buckets): solo los umbrales.
+                .doesNotContainPattern("http_server_requests_seconds_bucket\\{[^}]*le=\"0\\.001\"");
     }
 }

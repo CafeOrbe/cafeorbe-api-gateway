@@ -1,9 +1,19 @@
 server:
   port: 8080
+  # DIS-01: al detener una réplica termina las peticiones en curso antes de apagarse.
+  shutdown: graceful
 
 spring:
   application:
     name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL:false}
+      timeout: 500ms
   cloud:
     gateway:
       httpclient:
@@ -44,9 +54,56 @@ spring:
 cafeorbe:
   jwt:
     secret: ${JWT_SECRET:cafeorbe-dev-jwt-secret-cambiar-en-prod-0123456789}
+  seguridad:
+    # SEG-02: credencial que el gateway agrega en X-Internal-Token a cada petición hacia los servicios.
+    credencial-interna: ${INTERNAL_TOKEN:cafeorbe-dev-credencial-interna-cambiar-en-prod}
+  estado:
+    # redis: sesiones cerradas y límites compartidos entre réplicas. memoria: solo pruebas.
+    modo: redis
+  limite:
+    rest:
+      # SEG-03: peticiones REST por usuario y por segundo; el excedente recibe 429.
+      por-segundo: ${LIMITE_REST_POR_SEGUNDO:20}
+
+logging:
+  structured:
+    # OBS-01: logs JSON para Log Analytics.
+    format:
+      console: ${LOG_FORMAT:logstash}
 
 management:
+  # OBS-01: el ingress de Azure reparte entre réplicas, así que un scrape por la URL pública ve una al azar.
+  # Cada réplica empuja sus métricas cada 10 s al endpoint OTLP de Grafana Cloud (sin Alloy). Apagado por defecto.
+  otlp:
+    metrics:
+      export:
+        enabled: ${OTLP_METRICS_ENABLED:false}
+        url: ${OTLP_METRICS_URL:http://localhost:4318/v1/metrics}
+        step: ${OTLP_METRICS_STEP:10s}
+        headers:
+          Authorization: ${OTLP_METRICS_AUTH:}
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
+  endpoint:
+    health:
+      # DIS-01: /actuator/health/liveness y /actuator/health/readiness para las sondas de Azure Container Apps.
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: false
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      # DIS-01 / OBS-01: réplica que reporta, para medir el reparto entre réplicas y ver cuál cae.
+      instancia: ${CONTAINER_APP_REPLICA_NAME:${HOSTNAME:local}}
+    distribution:
+      # OBS-01 / REN-01: buckets fijos en los umbrales de los escenarios (p95 ≤ 800 ms, p99 ≤ 1,5 s, login < 3 s).
+      # Un histograma completo son ~70 buckets por serie y, con varias réplicas, supera las 10 000 series del plan
+      # gratuito de Grafana Cloud; con 8 buckets histogram_quantile sigue dando p95/p99 y la comparación con el
+      # umbral es exacta.
+      slo:
+        spring.cloud.gateway.requests: 50ms,100ms,200ms,400ms,800ms,1500ms,3s,5s
+        http.server.requests: 50ms,100ms,200ms,400ms,800ms,1500ms,3s,5s

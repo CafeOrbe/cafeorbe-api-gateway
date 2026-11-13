@@ -98,7 +98,7 @@ sequenceDiagram
 
     N->>G: GET /api/subastas con Authorization Bearer
     G->>G: Descarta Host y cualquier X-User-* del cliente
-    alt Ruta pública: POST /api/sesion u OPTIONS
+    alt Ruta pública: POST /api/sesion/google u OPTIONS
         G->>S: Reenvía sin identidad
     else Token ausente, inválido o vencido
         G-->>N: 401 Sesión requerida o expirada
@@ -110,7 +110,7 @@ sequenceDiagram
     end
 ```
 
-Solo tres casos no exigen token de sesión: `POST /api/sesion` (el ingreso), los preflight `OPTIONS` de CORS y `POST /api/streaming/webhooks/livekit`. Este último lo llama LiveKit, no un usuario: el gateway lo deja pasar y streaming-service lo autentica por la firma de LiveKit.
+Solo estos casos no exigen token de sesión: el ingreso con Google (`POST /api/sesion/google`, el único acceso: no hay login propio), los preflight `OPTIONS` de CORS y `POST /api/streaming/webhooks/livekit`. Con token, además de validarlo, el gateway rechaza con `401` las sesiones ya cerradas (SEG-05), limita a cada usuario a `LIMITE_REST_POR_SEGUNDO` peticiones por segundo con `429` (SEG-03), agrega la credencial interna `X-Internal-Token` que exigen los servicios (SEG-02) y un `X-Correlation-Id` que vuelve en la respuesta (OBS-01). Este último lo llama LiveKit, no un usuario: el gateway lo deja pasar y streaming-service lo autentica por la firma de LiveKit.
 
 ## 5. Modelo de confianza
 
@@ -189,7 +189,10 @@ Todas las respuestas de error, las propias y las de los servicios, tienen la mis
 | `AUCTION_URL` | `http://localhost:8082` | Destino de `/api/subastas` |
 | `WALLET_URL` | `http://localhost:8083` | Destino de `/api/orbes` |
 | `STREAMING_URL` | `http://localhost:8084` | Destino de `/api/streaming` |
-| `JWT_SECRET` | valor de desarrollo | Secreto compartido con identity y realtime (mínimo 32 caracteres) |
+| `JWT_SECRET` | valor de desarrollo | Secreto compartido con identity (mínimo 32 caracteres) |
+| `INTERNAL_TOKEN` | valor de desarrollo | Credencial interna que el gateway agrega a cada petición (SEG-02). La misma en todos los servicios |
+| `REDIS_HOST` `REDIS_PORT` `REDIS_PASSWORD` `REDIS_SSL` | `localhost:6379` · `false` | Sesiones cerradas y límite por usuario. Si Redis no responde, se deja pasar y se registra |
+| `LIMITE_REST_POR_SEGUNDO` | `20` | SEG-03 |
 | `CORS_ORIGINS` | `http://localhost:5173` | Orígenes permitidos del frontend |
 
 ## 10. Ejecución y pruebas
