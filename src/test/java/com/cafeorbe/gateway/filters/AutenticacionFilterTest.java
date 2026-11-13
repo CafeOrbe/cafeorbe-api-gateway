@@ -3,7 +3,10 @@ package com.cafeorbe.gateway.filters;
 import com.cafeorbe.gateway.filters.auth.AutenticacionFilter;
 import com.cafeorbe.gateway.filters.auth.ValidadorDeToken;
 import com.cafeorbe.gateway.filters.errors.RespuestaDeError;
+import com.cafeorbe.gateway.seguridad.Auditoria;
+import com.cafeorbe.gateway.seguridad.EstadoCompartidoEnMemoria;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.DisplayName;
@@ -28,7 +31,8 @@ class AutenticacionFilterTest {
 
     private final ValidadorDeToken validador = new ValidadorDeToken(SECRETO);
     private final AutenticacionFilter filtro =
-            new AutenticacionFilter(validador, new RespuestaDeError(new ObjectMapper()));
+            new AutenticacionFilter(validador, new RespuestaDeError(new ObjectMapper()), new EstadoCompartidoEnMemoria(),
+                    new Auditoria(new SimpleMeterRegistry()), "credencial-de-prueba");
     private final AtomicReference<ServerWebExchange> recibido = new AtomicReference<>();
     private final GatewayFilterChain cadena = intercambio -> {
         recibido.set(intercambio);
@@ -79,7 +83,7 @@ class AutenticacionFilterTest {
     @DisplayName("Con token válido pasa la identidad en X-User-* y descarta las cabeceras que puso el cliente")
     void conSesion() {
         UUID usuario = UUID.randomUUID();
-        String token = Jwts.builder().subject(usuario.toString()).claim("nombre", "José").claim("rol", "COMPRADOR")
+        String token = Jwts.builder().id("jti-1").subject(usuario.toString()).claim("nombre", "José").claim("rol", "COMPRADOR")
                 .signWith(Keys.hmacShaKeyFor(SECRETO.getBytes(StandardCharsets.UTF_8))).compact();
 
         ejecutar(MockServerHttpRequest.get("/api/subastas")
@@ -90,5 +94,16 @@ class AutenticacionFilterTest {
         assertThat(cabeceras.getFirst("X-User-Id")).isEqualTo(usuario.toString());
         assertThat(cabeceras.getFirst("X-User-Name")).isEqualTo("Jos%C3%A9");
         assertThat(cabeceras.getFirst("X-User-Role")).isEqualTo("COMPRADOR");
+        assertThat(cabeceras.getFirst("X-Internal-Token")).isEqualTo("credencial-de-prueba");
+    }
+
+    @Test
+    @DisplayName("SEG-05 · Un token válido pero sin jti (no revocable) ya no se acepta")
+    void tokenSinJti() {
+        String token = Jwts.builder().subject(UUID.randomUUID().toString()).claim("nombre", "A").claim("rol", "COMPRADOR")
+                .signWith(Keys.hmacShaKeyFor(SECRETO.getBytes(StandardCharsets.UTF_8))).compact();
+        var respuesta = ejecutar(MockServerHttpRequest.get("/api/subastas").header(HttpHeaders.AUTHORIZATION, "Bearer " + token));
+        assertThat(recibido.get()).isNull();
+        assertThat(respuesta.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 }
