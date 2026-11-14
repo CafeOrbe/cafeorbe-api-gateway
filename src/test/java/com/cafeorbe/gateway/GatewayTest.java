@@ -302,7 +302,8 @@ class GatewayTest {
                 .get().uri("/actuator/prometheus").header("X-Internal-Token", "credencial-de-prueba")
                 .exchange().expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
 
-        org.assertj.core.api.Assertions.assertThat(cuerpo).contains("instancia=\"")
+        // Sin CONTAINER_APP_REPLICA_NAME (ambiente express) cada réplica usa un id propio, no el hostname compartido.
+        org.assertj.core.api.Assertions.assertThat(cuerpo).containsPattern("instancia=\"[0-9a-f]{8}-[0-9a-f]{4}-")
                 .containsPattern("http_server_requests_seconds_bucket\\{[^}]*le=\"0\\.8\"")
                 // SEG-02: la verificación de la sesión (token + sesión cerrada en Redis) tiene su bucket en 5 ms.
                 .containsPattern("cafeorbe_seguridad_verificacion_seconds_bucket\\{[^}]*etapa=\"sesion\"[^}]*le=\"0\\.005\"")
