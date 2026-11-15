@@ -130,11 +130,13 @@ jobs:
             exit 1
           fi
 
+          # DIS-01: el ingreso mantiene dos réplicas y puede crecer hasta cuatro.
           az containerapp update \
             --name "$APP_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --image "$IMAGE" \
-            --min-replicas 1 \
+            --min-replicas 2 \
+            --max-replicas 4 \
             --set-env-vars \
               "JWT_SECRET=$JWT_SECRET" \
               "INTERNAL_TOKEN=$INTERNAL_TOKEN" \
@@ -220,11 +222,13 @@ jobs:
             exit 1
           fi
 
+          # DIS-01: el ingreso mantiene dos réplicas y puede crecer hasta cuatro.
           az containerapp update \
             --name "$APP_NAME" \
             --resource-group "$RESOURCE_GROUP" \
             --image "$IMAGE" \
-            --min-replicas 1 \
+            --min-replicas 2 \
+            --max-replicas 4 \
             --set-env-vars \
               "JWT_SECRET=$JWT_SECRET" \
               "INTERNAL_TOKEN=$INTERNAL_TOKEN" \
