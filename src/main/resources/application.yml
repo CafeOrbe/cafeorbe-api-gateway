@@ -34,6 +34,43 @@ spring:
             max-age: 3600
       # Tabla de rutas por servicio. Solo se expone lo que pertenece a una historia del MVP.
       routes:
+        # DIS-01: lecturas (GET) con tiempo límite corto y reintento. Mientras una réplica reinicia, el ingress de
+        # Azure le sigue mandando parte del tráfico y la petición queda colgada; con un límite de ~1,2 s y hasta 4
+        # reintentos, el ingress vuelve a repartir y cada intento tiene otra oportunidad de llegar a la réplica sana.
+        # Solo GET: repetir una lectura no tiene efectos; POST/PUT no se reintentan (podrían duplicar la operación).
+        # Van antes que las rutas generales del mismo servicio, que siguen atendiendo el resto de métodos.
+        - id: auction-lectura
+          uri: ${AUCTION_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/subastas, /api/subastas/**
+            - Method=GET
+          metadata: &lectura-metadata
+            response-timeout: ${GATEWAY_LECTURA_TIMEOUT_MS:1200}
+          filters: &lectura-filtros
+            - name: Retry
+              args:
+                retries: ${GATEWAY_LECTURA_REINTENTOS:4}
+                methods: GET
+                statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE, GATEWAY_TIMEOUT
+                backoff:
+                  firstBackoff: 50ms
+                  maxBackoff: 200ms
+                  factor: 2
+                  basedOnPreviousValue: false
+        - id: wallet-lectura
+          uri: ${WALLET_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/orbes, /api/orbes/**
+            - Method=GET
+          metadata: *lectura-metadata
+          filters: *lectura-filtros
+        - id: streaming-lectura
+          uri: ${STREAMING_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/streaming, /api/streaming/**
+            - Method=GET
+          metadata: *lectura-metadata
+          filters: *lectura-filtros
         - id: identity
           uri: ${IDENTITY_URL:http://localhost:8081}
           predicates:
