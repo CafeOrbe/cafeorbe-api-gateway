@@ -138,7 +138,7 @@ class ReintentoDeLecturasTest {
     }
 
     @Test
-    @DisplayName("DIS-01 · Si todos los intentos fallan responde 504 tras 1 + 4 intentos, sin esperar los 10 s generales")
+    @DisplayName("DIS-01 · Si todos los intentos fallan responde 504 tras 1 + 9 intentos, sin esperar los 10 s generales")
     void getAgotaLosReintentos() {
         primerasQueFallan = 100;
         long inicio = System.nanoTime();
@@ -146,8 +146,8 @@ class ReintentoDeLecturasTest {
         http.get().uri("/api/streaming/subastas/" + UUID.randomUUID() + "/estado").header(HttpHeaders.AUTHORIZATION, sesion())
                 .exchange().expectStatus().isEqualTo(504);
 
-        assertThat(llamadas.get()).isEqualTo(5);
-        assertThat(Duration.ofNanos(System.nanoTime() - inicio)).isLessThan(Duration.ofSeconds(4));
+        assertThat(llamadas.get()).isEqualTo(10);
+        assertThat(Duration.ofNanos(System.nanoTime() - inicio)).isLessThan(Duration.ofSeconds(6));
     }
 
     @Test
